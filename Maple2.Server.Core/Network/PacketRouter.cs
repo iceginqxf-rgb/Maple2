@@ -20,7 +20,14 @@ public class PacketRouter<T> where T : Session {
 
     public void OnPacket(object? sender, IByteReader reader) {
         var op = reader.Read<RecvOp>();
+        // RECVDUMP temp
+        bool interesting = op is RecvOp.RequestItemUse or RecvOp.Skill or RecvOp.StateSkill
+            or RecvOp.RequestItemInventory or RecvOp.RequestItemBox or RecvOp.ItemRepeat
+            or RecvOp.ItemEquip;
         PacketHandler<T>? handler = handlers.GetValueOrDefault(op);
+        if (interesting || handler is null) {
+            logger.Warning("[RECVDUMP] op={Op} handler={Handler}", $"0x{(ushort)op:X4}", handler?.GetType().Name ?? "NULL");
+        }
         if (sender is not T session) return;
 
         // Let another system schedule when to call Handle

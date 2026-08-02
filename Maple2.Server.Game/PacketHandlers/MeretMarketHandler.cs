@@ -1,4 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 using Maple2.Database.Extensions;
 using Maple2.Database.Storage;
 using Maple2.Model;
@@ -256,8 +256,13 @@ public class MeretMarketHandler : FieldPacketHandler {
 
     private void HandleOpenShop(GameSession session, IByteReader packet) {
         MeretMarketSearch meretMarketSearch = packet.ReadClass<MeretMarketSearch>();
+        MeretMarketSection section = MeretMarketSection.Premium;
+        try { section = ToMarketSection(packet.ReadByte()); } catch { }
+        // Log all available premium market tab ids
+        var allItems = session.GetPremiumMarketItems();
+        Logger.Warning($"[MERET DEBUG] HandleOpenShop TabId={meretMarketSearch.TabId} Section={section} Page={meretMarketSearch.StartPage} PerPage={meretMarketSearch.ItemsPerPage} TotalPremiumItems={allItems.Count()} Tabs=[{string.Join(",", allItems.GroupBy(x => x.TabId).OrderBy(g => g.Key).Select(g => $"{g.Key}:{g.Count()}"))}]");
 
-        ICollection<MarketItem> entries = GetItems(session, meretMarketSearch, MeretMarketSection.All).ToList();
+        ICollection<MarketItem> entries = GetItems(session, meretMarketSearch, section).ToList();
         int totalItems = entries.Count;
         entries = TakeLimit(entries, meretMarketSearch.StartPage, meretMarketSearch.ItemsPerPage);
 
@@ -497,12 +502,13 @@ public class MeretMarketHandler : FieldPacketHandler {
         bool sortJob = false;
         if (meretMarketSearch.TabId is not 1) {
             if (!GetTab(section, meretMarketSearch.TabId, out MeretMarketCategoryTable.Tab? tab)) {
-                return new List<MarketItem>();
+                tab = new MeretMarketCategoryTable.Tab([], false, false, []);
             }
             // get any sub tabs
+            int[] subTabIds = tab.SubTabIds ?? [];
             tabIds = new[] {
                 meretMarketSearch.TabId,
-            }.Concat(tab.SubTabIds).ToArray();
+            }.Concat(subTabIds).ToArray();
             sortGender = tab.SortGender;
             sortJob = tab.SortJob;
         }
@@ -511,12 +517,13 @@ public class MeretMarketHandler : FieldPacketHandler {
         IEnumerable<MarketItem> items;
         switch (section) {
             case MeretMarketSection.All:
+                Logger.Warning($"[MERET DEBUG] GetItems All tabIds=[{string.Join(",", tabIds)}] section={section}");
                 items = db.GetUgcMarketItems(tabIds);
                 items = items.Concat(session.GetPremiumMarketItems(tabIds));
                 items = Filter(items, meretMarketSearch.Gender, meretMarketSearch.Job, meretMarketSearch.SearchString);
                 return Sort(items, meretMarketSearch.SortBy, sortJob, sortGender);
             case MeretMarketSection.Premium:
-            case MeretMarketSection.RedMeret:
+                Logger.Warning($"[MERET DEBUG] GetItems Premium tabIds=[{string.Join(",", tabIds)}] section={section}");
                 items = session.GetPremiumMarketItems(tabIds);
                 items = Filter(items, meretMarketSearch.Gender, meretMarketSearch.Job, meretMarketSearch.SearchString);
                 return Sort(items, meretMarketSearch.SortBy, sortJob, sortGender);

@@ -78,6 +78,7 @@ public class SkillHandler : FieldPacketHandler {
         int serverTick = packet.ReadInt();
         int skillId = packet.ReadInt();
         short level = packet.ReadShort();
+        Logger.Warning("[SKILL USE] id={SkillId} lv={Level} uid={Uid}", skillId, level, skillUid);
 
         if (session.HeldLiftup != null) {
             if (session.HeldLiftup.SkillId == skillId && session.HeldLiftup.Level == level) {
@@ -104,6 +105,7 @@ public class SkillHandler : FieldPacketHandler {
         packet.ReadInt(); // ClientTick
         record.Unknown = packet.ReadBool(); // UnkBool
         record.ItemUid = packet.ReadLong();
+        Logger.Warning("[SKILL USE] itemUid={ItemUid} skill={SkillId}", record.ItemUid, skillId);
         record.IsHold = packet.ReadBool();
         if (record.IsHold) {
             record.HoldInt = packet.ReadInt();

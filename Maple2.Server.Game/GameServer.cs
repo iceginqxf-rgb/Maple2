@@ -60,6 +60,10 @@ public class GameServer : Server<GameSession> {
             premiumMarketCache.TryAdd(id, new PremiumMarketItem(marketItemMetadata, itemMetadata));
         }
 
+        // Log premium market cache stats
+        var tabStats = premiumMarketCache.Values.GroupBy(x => x.TabId).OrderBy(g => g.Key).ToDictionary(g => g.Key, g => g.Count());
+        System.Console.WriteLine($"[PREMIUM MARKET] Loaded {premiumMarketCache.Count} items across {tabStats.Count} tabs: {string.Join(", ", tabStats.Select(kv => $"{kv.Key}:{kv.Value}"))}");
+
         debugGraphicsContext.Initialize();
     }
 

@@ -29,18 +29,29 @@ public class ItemUseHandler : FieldPacketHandler {
     public override void Handle(GameSession session, IByteReader packet) {
         if (session.Field is null) return;
         long itemUid = packet.ReadLong();
+        Logger.Warning("[ITEM USE] packet uid={ItemUid}", itemUid);
 
         Item? item = session.Item.Inventory.Get(itemUid);
         if (item == null) {
             Logger.Warning("RequestItemUse for invalid item:{ItemUid}", itemUid);
             return;
         }
+        Logger.Warning("[ITEM USE] id={ItemId} type={Type}/{SubType} func={Func} skill={Skill} cat={Cat}", item.Id, item.Metadata.Property.Type, item.Metadata.Property.SubType, item.Metadata.Function?.Type, item.Metadata.Skill?.Id, item.Metadata.Property.Category);
 
         if (item.Metadata.Limit.RequireVip && session.Player.Value.Account.PremiumTime < DateTimeOffset.UtcNow.ToUnixTimeSeconds()) {
             return;
         }
 
         if (item.Metadata.Function?.OnlyShadowWorld == true && session.Field.Metadata.Property.Continent != Continent.ShadowWorld) {
+            return;
+        }
+
+        // Prefer real ItemFunction handlers (e.g. AddAdditionalEffect) over skill cast path.
+        // Only fall back to skill-item handling when there is no usable function.
+        if (item.Metadata.Skill is { Id: > 0 } &&
+            (item.Metadata.Function == null || item.Metadata.Function.Type == ItemFunction.None)) {
+            Logger.Warning("[ITEM USE] skill-item itemId={ItemId} uid={Uid} skill={SkillId}", item.Id, item.Uid, item.Metadata.Skill.Id);
+            HandleSkillItem(session, item);
             return;
         }
 
@@ -674,5 +685,44 @@ public class ItemUseHandler : FieldPacketHandler {
         session.Send(session.PrepareField(mapId)
             ? FieldEnterPacket.Request(session.Player)
             : FieldEnterPacket.Error(MigrationError.s_move_err_default));
+    }
+
+    private void HandleSkillItem(GameSession session, Item item) {
+        if (session.Field is null) return;
+        if (item.Metadata.Skill is not { Id: > 0 } skill) {
+            return;
+        }
+
+        short level = skill.Level > 0 ? skill.Level : (short) 1;
+        if (!session.SkillMetadata.TryGet(skill.Id, level, out SkillMetadata? metadata)) {
+            Logger.Warning("Skill item missing skill metadata item:{ItemId} skill:{SkillId},{Level}", item.Id, skill.Id, level);
+            return;
+        }
+
+        // Consume first so repeated clicks cannot multi-apply.
+        if (!session.Item.Inventory.Consume(item.Uid, 1)) {
+            Logger.Warning("Failed to consume skill item:{ItemUid} itemId:{ItemId}", item.Uid, item.Id);
+            return;
+        }
+
+        long startTick = session.Field.FieldTick;
+        int applied = 0;
+        foreach (SkillEffectMetadata effect in metadata.Data.Skills) {
+            if (effect.Condition is null) {
+                continue;
+            }
+            // Force-apply on owner regardless of condition target filtering issues.
+            session.Player.ApplyEffect(session.Player, session.Player, effect, startTick, EventConditionType.Activate, skillId: metadata.Id);
+            applied++;
+        }
+
+        // Fallback: some item skills only reference buff ids via nested skill entries; also try direct buff id=skill id.
+        if (applied == 0) {
+            session.Player.Buffs.AddBuff(session.Player, session.Player, skill.Id, level, startTick, notifyField: true);
+            Logger.Warning("[ITEM USE] fallback AddBuff itemId={ItemId} skill={SkillId}", item.Id, skill.Id);
+        }
+
+        session.Config.SaveSkillCooldown(metadata, startTick);
+        Logger.Warning("[ITEM USE] applied skill-item itemId={ItemId} skill={SkillId} effects={Count}", item.Id, skill.Id, applied);
     }
 }

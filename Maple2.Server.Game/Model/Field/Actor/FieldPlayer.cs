@@ -665,7 +665,9 @@ public class FieldPlayer : Actor<Player> {
             }
         }
 
-        if (metadata.Data.Consume.UseItem) {
+        // Many item skills (tonics/exp boosters) omit consume.useItem in metadata.
+        // If the client provided an ItemUid, treat it as an item-cast and consume 1.
+        if (metadata.Data.Consume.UseItem || record.ItemUid != 0) {
             if (record.ItemUid == 0) {
                 Logger.Error("Invalid item uid for skill: {SkillId},{Level}", metadata.Id, metadata.Level);
                 return false;
@@ -675,6 +677,11 @@ public class FieldPlayer : Actor<Player> {
             if (item == null) {
                 Logger.Error("Invalid item uid for skill: {SkillId},{Level}", metadata.Id, metadata.Level);
                 return false;
+            }
+
+            // Prefer matching item.skill id when available; still consume if skill id matches cast.
+            if (item.Metadata.Skill is { Id: > 0 } itemSkill && itemSkill.Id != metadata.Id) {
+                Logger.Warning("Item skill mismatch item:{ItemId} itemSkill:{ItemSkillId} cast:{SkillId}", item.Id, itemSkill.Id, metadata.Id);
             }
 
             if (!Session.Item.Inventory.Consume(item.Uid, 1)) {

@@ -72,6 +72,14 @@ public sealed class ExperienceManager {
         }
     }
 
+
+    private float GetExpRate() {
+        // Get exp rate from active buffs (SpecialAttribute.Experience)
+        // Rate of 2 means +200% bonus, so total multiplier = 1 + Rate
+        float rate = session.Stats.Values[SpecialAttribute.Experience].Rate;
+        return 1f + rate;
+    }
+
     public void ResetChainKill() => ChainKillCount = 0;
 
     public void OnKill(IActor npc) {
@@ -90,6 +98,7 @@ public sealed class ExperienceManager {
                 return;
             }
         }
+        expGained = (long) (expGained * GetExpRate());
         expGained += GetRestExp((long) (expGained * expRate));
         LevelUp();
         session.Send(ExperienceUpPacket.Add(expGained, Exp, RestExp, ExpMessageCode.s_msg_take_exp, npc.ObjectId));
@@ -106,6 +115,7 @@ public sealed class ExperienceManager {
         if (expGained <= 0) {
             return 0;
         }
+        expGained = (long) (expGained * GetExpRate());
         expGained += GetRestExp(expGained);
         LevelUp();
         AddPrestigeExp(message.Type());

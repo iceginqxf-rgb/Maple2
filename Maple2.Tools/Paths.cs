@@ -1,11 +1,11 @@
-﻿// ReSharper disable InconsistentNaming
+// ReSharper disable InconsistentNaming
 using System;
 using System.IO;
 
 namespace Maple2.Tools;
 
 public static class Paths {
-    public static readonly string SOLUTION_DIR = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../.."));
+    public static readonly string SOLUTION_DIR = Environment.GetEnvironmentVariable("MAPLE2_SOLUTION_DIR") ?? Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../.."));
 
     public static readonly string DEBUG_TRIGGERS_DIR = Path.Combine(SOLUTION_DIR, "Maple2.Server.Game", "DebugTriggers");
 
